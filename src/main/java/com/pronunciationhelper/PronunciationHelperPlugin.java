@@ -48,8 +48,11 @@ public class PronunciationHelperPlugin extends Plugin
 	private String lastTextProcessed;
 	private boolean showOnlyTranslation = false;
 	private String originalText;
+	private boolean weModifiedText = false;
 
 	private final String MENU_ENTRY_NAME = "Pronounce";
+
+	private boolean keyHeld = false;
 
 	private final KeyListener translationKeyListener = new KeyListener()
 	{
@@ -59,8 +62,10 @@ public class PronunciationHelperPlugin extends Plugin
 		@Override
 		public void keyPressed(KeyEvent e)
 		{
-			if (config.pronunciationHotkey().matches(e))
+			if (config.pronunciationHotkey().matches(e) && !keyHeld)
 			{
+				weModifiedText = true;
+				keyHeld = true;
 				showOnlyTranslation = true;
 				//allow the sub to take place
 				lastTextProcessed = "";
@@ -72,6 +77,8 @@ public class PronunciationHelperPlugin extends Plugin
 		{
 			if (config.pronunciationHotkey().matches(e))
 			{
+				weModifiedText = true;
+				keyHeld = false;
 				showOnlyTranslation = false;
 				lastTextProcessed = "";
 			}
@@ -159,13 +166,16 @@ public class PronunciationHelperPlugin extends Plugin
 				"", npcName + " is pronounced: " + pronunciation, null);
 	}
 
+	//todo best solution may be : if npc name changes, and text is already coloured, dont make any more subsitutions
+	//untill the name changes again just to be safe.
 	private void handleDialogueWidget(Widget widget)
 	{
 		if (widget == null) return;
 
 		String text = widget.getText();
-		if (isUnmodifiedText(text))
+		if (!text.equals(lastTextProcessed) && !weModifiedText)
 		{
+			log.info("Setting original text to: " + text);
 			originalText = text;
 		}
 
@@ -174,6 +184,8 @@ public class PronunciationHelperPlugin extends Plugin
 		//this check is needed or we will keep replacing the word forever overflowing the message container
 		if (!text.equals(lastTextProcessed))
 		{
+			log.info("text is: " + text);
+			log.info("last text process is: " + lastTextProcessed);
 			String newText = originalText;
 
 			for (Map.Entry<String, String> entry : PronunciationHelperDictionary.PRONUNCIATIONS.entrySet())
@@ -203,8 +215,12 @@ public class PronunciationHelperPlugin extends Plugin
 				widget.setText(newText);
 				widget.revalidate();
 			}
-
 			lastTextProcessed = newText;
+			weModifiedText = true;
+		}
+		else{
+			lastTextProcessed = text;
+			weModifiedText = false;
 		}
 
 	}
@@ -227,6 +243,13 @@ public class PronunciationHelperPlugin extends Plugin
 	    }
 
 		return matchedWord;
+	}
+
+	private boolean eitherDialogueWidgetVisisble() {
+		Widget npcDialogue = client.getWidget(ComponentID.DIALOG_NPC_TEXT);
+		Widget playerDialogue = client.getWidget(ComponentID.DIALOG_PLAYER_TEXT);
+		return (npcDialogue != null && !npcDialogue.isHidden()) ||
+				(playerDialogue != null && !playerDialogue.isHidden());
 	}
 
 	//returns weather text has <col=..> in it or not
